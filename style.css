@@ -1,0 +1,360 @@
+/* Human TPS: minimal, terminal-flavoured, one screen. */
+
+:root {
+  --bg: #0d0f10;
+  --fg: #e6e8e6;
+  --muted: #8a918d;
+  --line: #262a2b;
+  --field: #131617;
+  --accent: #39d98a;       /* "tokens are flowing" green */
+  --accent-ink: #06170e;
+  --paused: #e0b44c;
+  /* token highlight colors: soft, low-alpha so the text stays readable */
+  --tok0: rgba(57, 217, 138, 0.20);
+  --tok1: rgba(96, 165, 250, 0.22);
+  --tok2: rgba(244, 114, 182, 0.20);
+  --tok3: rgba(250, 204, 21, 0.18);
+  --tok4: rgba(167, 139, 250, 0.22);
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f6f3;
+    --fg: #16191a;
+    --muted: #666d69;
+    --line: #d9dbd6;
+    --field: #ffffff;
+    --accent: #0f9d58;
+    --accent-ink: #ffffff;
+    --paused: #a87700;
+    --tok0: rgba(15, 157, 88, 0.16);
+    --tok1: rgba(37, 99, 235, 0.14);
+    --tok2: rgba(219, 39, 119, 0.13);
+    --tok3: rgba(202, 138, 4, 0.18);
+    --tok4: rgba(124, 58, 237, 0.14);
+    color-scheme: light;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 680px;
+  /* Exactly one screen tall: the typing area (.field) takes whatever room is left. */
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  padding: clamp(16px, 4vh, 40px) 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.6vh, 18px);
+}
+
+@media (max-height: 700px) {
+  .wrap { padding-top: 10px; gap: 8px; } /* short laptop screens: every pixel counts */
+}
+
+a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--muted); }
+a:hover { color: var(--accent); text-decoration-color: currentColor; }
+
+/* ---- Header ---- */
+header { text-align: center; }
+h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  letter-spacing: 0.18em;
+  font-weight: 800;
+}
+.cursor { color: var(--accent); animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.tagline { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* ---- The number ---- */
+.meter { text-align: center; }
+.tps {
+  font-size: clamp(3.5rem, min(22vw, 16vh), 9rem); /* shrinks on narrow *and* short screens */
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  transition: color 0.3s ease;
+}
+body[data-state="live"] .tps { color: var(--accent); }
+body[data-state="paused"] .tps { opacity: 0.6; }
+.tps-label {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.3em;
+}
+.status {
+  display: inline-block;
+  margin-left: 0.6em;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.compare {
+  margin: 6px 0 0;
+  min-height: 1.4em; /* reserve the line so the layout doesn't jump when it appears */
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+body[data-state="live"] .status { color: var(--accent); border-color: currentColor; }
+body[data-state="paused"] .status { color: var(--paused); border-color: currentColor; }
+
+/* ---- Typing area ----
+   The textarea is transparent and sits on top of .backdrop, which renders the
+   same text with each token colored. Both must share font, padding and wrapping. */
+.field {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;     /* grow into the free space, shrink when the screen is short */
+  min-height: 5.5em;
+  max-height: 20em;
+  background: var(--field);
+  border-radius: 10px;
+}
+textarea, .backdrop {
+  padding: 14px 16px;
+  font: 16px/1.55 var(--mono); /* 16px avoids iOS zoom-on-focus */
+  letter-spacing: normal;
+  tab-size: 4;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+textarea {
+  position: relative;
+  z-index: 1;
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  resize: none;
+  background: transparent;
+  color: var(--fg);
+  caret-color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.2s ease;
+}
+.backdrop {
+  position: absolute;
+  top: 1px;  /* inside the textarea's 1px border */
+  left: 1px;
+  overflow: hidden;
+  color: transparent;
+  border-radius: 9px;
+  pointer-events: none;
+}
+.backdrop span { border-radius: 3px; }
+.t0 { background: var(--tok0); }
+.t1 { background: var(--tok1); }
+.t2 { background: var(--tok2); }
+.t3 { background: var(--tok3); }
+.t4 { background: var(--tok4); }
+textarea:focus { border-color: var(--accent); }
+textarea::placeholder { color: var(--muted); }
+textarea:disabled { opacity: 0.6; }
+
+/* ---- Stats ---- */
+.stats {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 22px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.stats b.record { color: var(--accent); }
+
+/* ---- Buttons ---- */
+.actions { display: flex; justify-content: center; gap: 10px; }
+button {
+  font: 600 0.9rem var(--mono);
+  padding: 10px 18px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+.toast, .fineprint { margin: 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
+.toast { min-height: 1.2em; color: var(--accent); }
+
+/* ---- Tokenizer switch ---- */
+.tok-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); }
+.seg button:disabled { cursor: progress; opacity: 1; }
+
+/* ---- Footer ---- */
+footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+footer .links { display: flex; gap: 16px; }
+
+/* ---- Share sheet ---- */
+.sheet {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0; /* padding lives on .sheet-body, so a click on the dialog itself = backdrop */
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--mono);
+}
+.sheet::backdrop { background: rgba(0, 0, 0, 0.55); }
+.sheet-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.sheet h2 { margin: 0; font-size: 1rem; letter-spacing: 0.04em; }
+button.icon { min-height: 36px; padding: 4px 10px; border-color: transparent; color: var(--muted); }
+.preview {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: 0.85rem/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all; /* one tap selects the whole message, as a manual copy fallback */
+}
+.sheet-main { display: flex; gap: 10px; }
+.sheet-main button { flex: 1; }
+.socials { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.socials a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.socials a:hover { border-color: var(--accent); }
+
+/* ---- llama.cpp mode: always a dark terminal, whatever the system theme ---- */
+body[data-mode="llama"] {
+  --bg: #050505;
+  --fg: #d4d4d4;
+  --muted: #7c7c7c;
+  --line: #262626;
+  --field: #0b0b0b;
+  --accent: #4af626;
+  --accent-ink: #031a00;
+  --paused: #e5c07b;
+  --tok0: rgba(74, 246, 38, 0.16);
+  --tok1: rgba(96, 165, 250, 0.20);
+  --tok2: rgba(244, 114, 182, 0.18);
+  --tok3: rgba(250, 204, 21, 0.16);
+  --tok4: rgba(167, 139, 250, 0.20);
+  color-scheme: dark;
+}
+body[data-mode="llama"] .tagline,
+body[data-mode="llama"] .compare { display: none; }
+body[data-mode="llama"] .tps { text-shadow: 0 0 18px rgba(74, 246, 38, 0.25); }
+
+.term { display: none; }
+body[data-mode="llama"] .term {
+  display: block;
+  flex-shrink: 0; /* only the typing area gives up room on short screens */
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.term-bar {
+  display: block;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font: 0.72rem/1.6 var(--mono);
+}
+.term-bar select {
+  font: inherit;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 4px;
+  cursor: pointer;
+}
+.console {
+  margin: 0;
+  height: 6em;
+  overflow-y: auto;
+  padding: 6px 12px;
+  color: var(--muted);
+  font: 0.68rem/1.45 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.console .hl { color: var(--accent); }
+@media (min-height: 900px) {
+  .console { height: 10em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor { animation: none; }
+  * { transition: none !important; }
+}

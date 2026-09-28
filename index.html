@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Privacy by construction: this page may not open any network connection (fetch/XHR/WebSocket/beacon). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Human TPS</title>
+  <meta name="description" content="How fast can your fingers generate tokens? A tiny tokens-per-second benchmark for humans.">
+  <meta name="theme-color" content="#0d0f10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f6f3" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0f10'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' fill='%2339d98a' text-anchor='middle'%3Et/s%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <!-- tokenizer.js loads the selected tokenizer's (large) vendored files on demand. -->
+  <script defer src="tokenizer.js"></script>
+  <script defer src="llamacpp.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>HUMAN&nbsp;TPS<span class="cursor" aria-hidden="true">_</span></h1>
+      <p class="tagline">How fast can your fingers generate tokens?</p>
+    </header>
+
+    <section class="meter" aria-label="Live tokens per second">
+      <div id="tps" class="tps" aria-live="off">0.00</div>
+      <div class="tps-label">TPS <span id="status" class="status">ready</span></div>
+      <p id="compare" class="compare" title="Ballpark machine speeds, for fun"></p>
+    </section>
+
+    <!-- llama.cpp mode only: a fake terminal with a model picker, boot log and perf stats. -->
+    <div class="term">
+      <label class="term-bar">$ ./llama-cli -m <select id="llama-model" aria-label="Model (which tokenizer counts your tokens)"></select></label>
+      <pre id="console" class="console" aria-label="llama.cpp log"></pre>
+    </div>
+
+    <div class="field">
+      <!-- Mirrors the text behind the textarea with each token colored. -->
+      <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+      <textarea id="input" rows="5" disabled
+                placeholder="Loading tokenizer…"
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                aria-label="Typing area"></textarea>
+    </div>
+
+    <p class="stats" aria-live="polite">
+      <span>Average <b id="avg">0.00</b> TPS</span>
+      <span>Tokens <b id="tokens">0</b></span>
+      <span>Time <b id="time">0.0</b>s</span>
+      <span title="Your best average, stored only in this browser">Best <b id="best">–</b></span>
+    </p>
+
+    <div class="actions">
+      <button id="restart" type="button">Restart</button>
+      <button id="share" type="button" class="primary" disabled>Share Result</button>
+    </div>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+
+    <div class="tok-row">
+      <span>Mode</span>
+      <span class="seg" role="group" aria-label="Mode">
+        <button type="button" data-mode="base" aria-pressed="false" title="Just type and watch your tokens per second">Base</button>
+        <button type="button" data-mode="llamacpp" aria-pressed="false" title="For nerds: a llama.cpp terminal where you pick an open model and its tokenizer">🦙 llama.cpp</button>
+      </span>
+    </div>
+    <p class="fineprint">
+      Tokenizer: <span id="tok-info">…</span><br>
+      Everything runs locally in your browser. Your text never leaves your device.
+    </p>
+
+    <footer>
+      <span>Powered by <a id="link-homoagens" href="#" rel="noopener">homoagens</a></span>
+      <span class="links">
+        <a id="link-github" href="#" rel="noopener">GitHub</a>
+        <a id="link-support" href="#" rel="noopener">Buy me a coffee</a>
+      </span>
+    </footer>
+  </main>
+
+  <!-- Share sheet: preview of the message + copy / device share / social links. -->
+  <dialog id="share-dialog" class="sheet" aria-labelledby="share-title">
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="share-title">Share your result</h2>
+        <button id="share-close" type="button" class="icon" aria-label="Close">✕</button>
+      </div>
+      <pre id="share-preview" class="preview"></pre>
+      <div class="sheet-main">
+        <button id="share-copy" type="button" class="primary">Copy text</button>
+      </div>
+      <div class="socials">
+        <a id="share-x" target="_blank" rel="noopener noreferrer">X</a>
+        <a id="share-reddit" target="_blank" rel="noopener noreferrer">Reddit</a>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>
